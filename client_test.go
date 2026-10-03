@@ -218,6 +218,27 @@ func TestAuditWarnsOnce(t *testing.T) {
 	}
 }
 
+func TestRejectedProfileWarnsOncePerName(t *testing.T) {
+	s := newVerdictServer(t)
+	s.setRespond(func(CheckRequest) (int, any) { return 400, "unknown profile \"hardend\"" })
+	logger, buf := captureLogger()
+	c := newTestClient(s.URL, func(cfg *Config) { cfg.Logger = logger })
+
+	got := c.CheckInput(bg, "hi", CheckOptions{Profile: "hardend"})
+	c.CheckInput(bg, "hi", CheckOptions{Profile: "hardend"})
+
+	if !got.Degraded {
+		t.Fatalf("expected the degraded fallback, got %+v", got)
+	}
+	if n := strings.Count(buf.String(), "rejected profile"); n != 1 || !strings.Contains(buf.String(), "hardend") {
+		t.Fatalf("expected one warning naming the profile, got %d: %s", n, buf.String())
+	}
+	c.CheckInput(bg, "hi", CheckOptions{Profile: "other"})
+	if n := strings.Count(buf.String(), "rejected profile"); n != 2 {
+		t.Fatalf("expected a second warning for a second name, got %d", n)
+	}
+}
+
 func TestAuditDoesNotWarnWhenTimeoutRaised(t *testing.T) {
 	s := newVerdictServer(t)
 	logger, buf := captureLogger()

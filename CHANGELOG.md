@@ -2,6 +2,13 @@
 
 All notable changes to `github.com/Verexa-dev/verexa-go` are recorded here. The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-10-03
+
+### Added
+
+- A check that names a profile the service does not know now logs one warning per profile name, with the service's reason, instead of failing open without a trace. The check still returns the degraded fallback; create the profile in the dashboard or fix the name.
+- Profiles you create in the dashboard can be passed as `profile` like the three built-in ones.
+
 ## [0.1.0] - 2026-10-03
 
 First public release.
