@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -46,15 +47,16 @@ type CheckOptions struct {
 }
 
 type Client struct {
-	apiKey      string
-	baseURL     string
-	timeout     time.Duration
-	failMode    FailMode
-	httpClient  *http.Client
-	logger      *slog.Logger
-	breaker     *CircuitBreaker
-	telemetry   *TelemetryBuffer
-	auditWarned atomic.Bool
+	apiKey           string
+	baseURL          string
+	timeout          time.Duration
+	failMode         FailMode
+	httpClient       *http.Client
+	logger           *slog.Logger
+	breaker          *CircuitBreaker
+	telemetry        *TelemetryBuffer
+	auditWarned      atomic.Bool
+	rejectedProfiles sync.Map
 }
 
 // New resolves cfg against the environment and returns a client. Called with
@@ -146,6 +148,13 @@ func (c *Client) Check(ctx context.Context, phase Phase, text string, opts Check
 		if status == 0 || status >= 500 {
 			c.breaker.RecordFailure()
 		}
+		if status == http.StatusBadRequest && opts.Profile != "" {
+			if _, seen := c.rejectedProfiles.LoadOrStore(opts.Profile, true); !seen {
+				c.logger.Warn(fmt.Sprintf("Verexa: the service rejected profile %q (%v). "+
+					"Every check that names it returns the degraded fallback until the profile exists. "+
+					"Fix the name or create the profile in the dashboard.", opts.Profile, err))
+			}
+		}
 		c.telemetry.Push(TelemetryEvent{Type: EventError, TraceID: traceID, Phase: phase, Status: status, Timestamp: time.Now()})
 		return c.fallback(text)
 	}
@@ -183,7 +192,10 @@ func (c *Client) post(ctx context.Context, body CheckRequest) (*CheckResponse, i
 	defer res.Body.Close()
 
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, maxResponseBytes))
+		detail, _ := io.ReadAll(io.LimitReader(res.Body, 512))
+		if message := strings.TrimSpace(string(detail)); message != "" {
+			return nil, res.StatusCode, fmt.Errorf("verdict-api returned %d: %s", res.StatusCode, message)
+		}
 		return nil, res.StatusCode, fmt.Errorf("verdict-api returned %d", res.StatusCode)
 	}
 
