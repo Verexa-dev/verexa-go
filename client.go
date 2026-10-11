@@ -56,6 +56,7 @@ type Client struct {
 	breaker          *CircuitBreaker
 	telemetry        *TelemetryBuffer
 	auditWarned      atomic.Bool
+	keyWarned        atomic.Bool
 	rejectedProfiles sync.Map
 }
 
@@ -148,6 +149,16 @@ func (c *Client) Check(ctx context.Context, phase Phase, text string, opts Check
 		if status == 0 || status >= 500 {
 			c.breaker.RecordFailure()
 		}
+		// the service read none of a body this large; failing open here made size a way past the guard.
+		if status == http.StatusRequestEntityTooLarge {
+			c.telemetry.Push(TelemetryEvent{Type: EventError, TraceID: traceID, Phase: phase, Status: status, Timestamp: time.Now()})
+			return oversize(text)
+		}
+		if (status == http.StatusUnauthorized || status == http.StatusForbidden) && c.keyWarned.CompareAndSwap(false, true) {
+			c.logger.Warn(fmt.Sprintf("Verexa: the service rejected this API key (%d). Every check returns the degraded "+
+				"fallback (%s) until the key is fixed, so nothing is being checked. "+
+				"Create or rotate a key in the dashboard under Settings > API keys.", status, c.fallback("").Action))
+		}
 		if status == http.StatusBadRequest && opts.Profile != "" {
 			if _, seen := c.rejectedProfiles.LoadOrStore(opts.Profile, true); !seen {
 				c.logger.Warn(fmt.Sprintf("Verexa: the service rejected profile %q (%v). "+
@@ -215,6 +226,18 @@ func (c *Client) fallback(text string) *CheckResponse {
 	return &CheckResponse{
 		Action:    action,
 		Detectors: []DetectorOutcome{},
+		Text:      text,
+		Degraded:  true,
+		PlanHash:  "unavailable",
+		Stages:    []StageOutcome{},
+	}
+}
+
+func oversize(text string) *CheckResponse {
+	return &CheckResponse{
+		Action:    ActionBlock,
+		Score:     1,
+		Detectors: []DetectorOutcome{{DetectorID: "text.oversize", Score: 1, Action: ActionBlock}},
 		Text:      text,
 		Degraded:  true,
 		PlanHash:  "unavailable",

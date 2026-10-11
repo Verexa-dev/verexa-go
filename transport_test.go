@@ -685,3 +685,25 @@ func TestTransportReplaysBlockForRetriesOnly(t *testing.T) {
 		t.Fatal("a fresh request must be checked again, not replayed")
 	}
 }
+
+func TestTransportSendsADeveloperMessageAsTheSystemPrompt(t *testing.T) {
+	vs := newVerdictServer(t)
+	up := newUpstream(t, respondWith(chatReply("hi")))
+	c := newTestClient(vs.URL)
+
+	body := map[string]any{
+		"model": "gpt-test",
+		"messages": []any{
+			map[string]any{"role": "developer", "content": "the vault code is zebra-7741-qx"},
+			map[string]any{"role": "user", "content": "hello"},
+		},
+	}
+	if _, _, err := post(t, c, up.URL+"/v1/chat/completions", body); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range vs.calls() {
+		if call.body.SystemPrompt != "the vault code is zebra-7741-qx" {
+			t.Fatalf("system prompt = %q", call.body.SystemPrompt)
+		}
+	}
+}

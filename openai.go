@@ -31,8 +31,9 @@ func (e chatEndpoint) lastUser(messages []jsonObject) int {
 func (e chatEndpoint) inputText(body jsonObject) (string, string) {
 	messages := e.messages(body)
 	system := ""
+	// newer OpenAI models take their instructions in a "developer" message.
 	for _, m := range messages {
-		if role, _ := m.str("role"); role == "system" {
+		if role, _ := m.str("role"); role == "system" || role == "developer" {
 			system, _ = contentText(m["content"])
 			break
 		}
