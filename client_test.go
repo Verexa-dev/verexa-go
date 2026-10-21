@@ -296,3 +296,32 @@ func TestNewTraceIDIsUUIDv4(t *testing.T) {
 		t.Fatalf("not a v4 uuid: %q", id)
 	}
 }
+
+func TestRejectedKeyWarnsOnce(t *testing.T) {
+	s := newVerdictServer(t)
+	s.setRespond(func(CheckRequest) (int, any) { return 401, "unauthorized" })
+	logger, buf := captureLogger()
+	c := newTestClient(s.URL, func(cfg *Config) { cfg.Logger = logger })
+
+	got := c.CheckInput(bg, "hi", CheckOptions{})
+	c.CheckInput(bg, "hi again", CheckOptions{})
+
+	if got.Action != ActionAllow || !got.Degraded {
+		t.Fatalf("expected the degraded fallback, got %+v", got)
+	}
+	if n := strings.Count(buf.String(), "rejected this API key (401)"); n != 1 {
+		t.Fatalf("expected one warning about the key, got %d: %s", n, buf.String())
+	}
+}
+
+func TestOversizeIsBlockedEvenWhenFailingOpen(t *testing.T) {
+	s := newVerdictServer(t)
+	s.setRespond(func(CheckRequest) (int, any) { return 413, "request body too large" })
+	c := newTestClient(s.URL)
+
+	got := c.CheckInput(bg, "a very long text", CheckOptions{})
+
+	if got.Action != ActionBlock || len(got.Detectors) != 1 || got.Detectors[0].DetectorID != "text.oversize" {
+		t.Fatalf("expected text.oversize to block, got %+v", got)
+	}
+}

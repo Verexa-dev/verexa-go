@@ -74,7 +74,7 @@ send(reply)
 
 ## Behaviour worth knowing
 
-- **Fails open by default.** `Check` never returns an error. If the service is unreachable the verdict is `allow` with `Degraded: true`, and a circuit breaker stops hammering it. Set `FailMode: verexa.FailClosed` to block instead.
+- **Fails open by default.** `Check` never returns an error. If the service is unreachable the verdict is `allow` with `Degraded: true`, and a circuit breaker stops hammering it. Set `FailMode: verexa.FailClosed` to block instead. Two cases do not follow the fail mode: a text the service refuses as too large to check is always blocked, and a rejected API key logs one warning, because every check it makes is unchecked.
 - **One trace id per turn.** The transport's input and output checks share one, so the dashboard shows them as one trace.
 - **Streaming is checked after the fact.** Chunks reach the caller as they arrive. When the stream ends, the assembled reply is checked, and a blocking verdict replaces the final event with a `*BlockedError` from the body's `Read` (`stream.Err()` in openai-go). It is a retraction signal, not a gate.
 - **Retries.** openai-go retries failed round trips, including a block. The transport remembers blocked turns, so a retry gets the same `*BlockedError` back without calling the model or the guard again. openai-go still waits out its backoff first (about 1.2s with the default two retries) before returning the error; `option.WithMaxRetries` controls that.

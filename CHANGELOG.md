@@ -2,6 +2,17 @@
 
 All notable changes to `github.com/Verexa-dev/verexa-go` are recorded here. The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - Unreleased
+
+### Fixed
+
+- A `developer` message is sent as the system prompt, so system-prompt leak detection works with models that use that role.
+
+### Changed
+
+- A `413` from the service, meaning the text was too large to check, now returns `block` with a `text.oversize` detector under either `FailMode`. It used to fail open.
+- A `401` or `403` logs one warning that the key was rejected and that nothing is being checked.
+
 ## [0.1.1] - 2026-10-03
 
 ### Added
