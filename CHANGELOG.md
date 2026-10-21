@@ -2,7 +2,7 @@
 
 All notable changes to `github.com/Verexa-dev/verexa-go` are recorded here. The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2] - Unreleased
+## [0.1.2] - 2026-10-21
 
 ### Fixed
 
